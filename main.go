@@ -11,7 +11,6 @@ import (
 	"google.golang.org/api/sheets/v4"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -62,7 +61,6 @@ func main() {
 	}
 
 	sort.Strings(keys)
-	r.Use(static.Serve("/", static.LocalFile("./ui/dist", false)))
 	r.GET("/api/furs", func(c *gin.Context) {
 		c.JSON(200, placed)
 	})
