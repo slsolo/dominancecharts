@@ -24,7 +24,7 @@ func main() {
 
 	r := gin.Default()
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://192.168.1.120:3000"}
+	config.AllowOrigins = []string{os.Getenv("VUE_APP_CORS_HOST")}
 	r.Use(cors.New(config))
 	ctx := context.Background()
 
