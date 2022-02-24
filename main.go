@@ -24,7 +24,7 @@ func main() {
 
 	r := gin.Default()
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{os.Getenv("VUE_APP_CORS_HOST")}
+	config.AllowAllOrigins = true
 	r.Use(cors.New(config))
 	ctx := context.Background()
 
