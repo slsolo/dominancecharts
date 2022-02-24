@@ -33,8 +33,8 @@ func main() {
 		log.Fatalf("Unable to retrieve Sheets client: %v", err)
 	}
 
-	spreadsheetId := "181njrl_PeCETmTjiKM9H4AJP2l_4-e-TPS7bBoWgTPQ"
-	readRange := "Fur!B2:B189"
+	spreadsheetId := os.Getenv("SPREADSHEET")
+	readRange := os.Getenv("RANGE")
 	resp, err := srv.Spreadsheets.Get(spreadsheetId).Ranges(readRange).IncludeGridData(true).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve data from sheet: %v", err)
