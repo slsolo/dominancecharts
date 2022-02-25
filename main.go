@@ -34,13 +34,35 @@ func main() {
 	}
 
 	spreadsheetId := os.Getenv("SPREADSHEET")
-	readRange := os.Getenv("RANGE")
+	readRange := "Fur!B2:B"
 	resp, err := srv.Spreadsheets.Get(spreadsheetId).Ranges(readRange).IncludeGridData(true).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve data from sheet: %v", err)
 	}
 
 	placed := make(map[string]int)
+	endofrange := 0
+	for _, sht := range resp.Sheets {
+		for _, row := range sht.Data {
+			for p, cell := range row.RowData {
+				for _, val := range cell.Values {
+					if val.FormattedValue == "" {
+						if endofrange == 0 {
+							endofrange = p + 1
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	placedRange := fmt.Sprintf("Fur!B2:B%d", endofrange)
+	resp, err = srv.Spreadsheets.Get(spreadsheetId).Ranges(placedRange).IncludeGridData(true).Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve data from sheet: %v", err)
+	}
+
 	for _, sht := range resp.Sheets {
 		for _, row := range sht.Data {
 			for p, cell := range row.RowData {
@@ -59,7 +81,6 @@ func main() {
 		keys[i] = k
 		i++
 	}
-
 	sort.Strings(keys)
 	r.GET("/api/furs", func(c *gin.Context) {
 		c.JSON(200, placed)
