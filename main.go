@@ -5,42 +5,27 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"time"
 
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
 )
 
-func main() {
-	err := godotenv.Load(".env")
+var pool *redis.Pool
 
-	if err != nil {
-		log.Println("In production...")
-	}
+func fetch(ctx context.Context, done chan bool, srv *sheets.Service, spreadsheet, sheet, column string, row int) {
+	conn := pool.Get()
+	defer conn.Close()
 
-	r := gin.Default()
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	r.Use(cors.New(config))
-	ctx := context.Background()
-
-	srv, err := sheets.NewService(ctx, option.WithAPIKey(os.Getenv("API_KEY")))
-	if err != nil {
-		log.Fatalf("Unable to retrieve Sheets client: %v", err)
-	}
-
-	spreadsheetId := os.Getenv("SPREADSHEET")
-	readRange := "Fur!B2:B"
-	resp, err := srv.Spreadsheets.Get(spreadsheetId).Ranges(readRange).IncludeGridData(true).Do()
+	readRange := fmt.Sprintf("%s!%s%d:%s", sheet, column, row, column)
+	resp, err := srv.Spreadsheets.Get(spreadsheet).Ranges(readRange).IncludeGridData(true).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve data from sheet: %v", err)
 	}
 
-	placed := make(map[string]int)
 	endofrange := 0
 	for _, sht := range resp.Sheets {
 		for _, row := range sht.Data {
@@ -57,52 +42,66 @@ func main() {
 		}
 	}
 
-	placedRange := fmt.Sprintf("Fur!B2:B%d", endofrange)
-	resp, err = srv.Spreadsheets.Get(spreadsheetId).Ranges(placedRange).IncludeGridData(true).Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve data from sheet: %v", err)
-	}
+	placedRange := fmt.Sprintf("%s!%s%d:%s%d", sheet, column, row, column, endofrange)
+	log.Printf("Placed range %s\n", placedRange)
+	resp, _ = srv.Spreadsheets.Get(spreadsheet).Ranges(placedRange).IncludeGridData(true).Do()
 
 	for _, sht := range resp.Sheets {
 		for _, row := range sht.Data {
 			for p, cell := range row.RowData {
 				for _, val := range cell.Values {
-					placed[val.FormattedValue] = p + 1
+					fmt.Printf("%s: %d", val.FormattedValue, p+1)
+					_, err = conn.Do("HSET", sheet, val.FormattedValue, p+1)
+					if err != nil {
+						log.Fatalf("Error setting redis value %v\n", err)
+					}
 				}
 			}
 		}
 	}
+	done <- true
+}
 
-	keys := make([]string, len(placed))
+func main() {
+	err := godotenv.Load(".env")
 
-	i := 0
-
-	for k := range placed {
-		keys[i] = k
-		i++
+	if err != nil {
+		log.Println("In production, fetching config from Heroku config parameters...")
 	}
-	sort.Strings(keys)
-	r.GET("/api/furs", func(c *gin.Context) {
-		c.JSON(200, placed)
-	})
 
-	r.GET("/api/furs/names", func(c *gin.Context) {
-		c.JSON(200, keys)
-	})
+	ctx := context.Background()
+	pool = &redis.Pool{
+		MaxIdle:     10,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", os.Getenv("REDIS_TLS_URL"))
+		},
+	}
 
-	r.GET("/api/furs/:name", func(c *gin.Context) {
-		c.JSON(200, placed[c.Param("name")])
-	})
-
-	r.GET("/api/furs/compare/:first/:second", func(c *gin.Context) {
-		if placed[c.Param("first")] == placed[c.Param("second")] {
-			c.String(400, "Both furs are the same. Please change your selection and try again.")
-		} else if placed[c.Param("first")] < placed[c.Param("second")] {
-			c.String(200, fmt.Sprintf("%s is dominant to %s", c.Param("first"), c.Param("second")))
-		} else {
-			c.String(200, fmt.Sprintf("%s is recessive to %s", c.Param("first"), c.Param("second")))
-		}
-	})
-
-	r.Run()
+	srv, err := sheets.NewService(ctx, option.WithAPIKey(os.Getenv("API_KEY")))
+	if err != nil {
+		log.Fatalf("Unable to retrieve Sheets client: %v", err)
+	}
+	furs := make(chan bool, 1)
+	eyes := make(chan bool, 1)
+	tails := make(chan bool, 1)
+	ears := make(chan bool, 1)
+	whiskerColour := make(chan bool, 1)
+	whiskerShape := make(chan bool, 1)
+	shades := make(chan bool, 1)
+	spreadsheetId := os.Getenv("SPREADSHEET")
+	fetch(ctx, furs, srv, spreadsheetId, "Fur", "B", 2)
+	fetch(ctx, eyes, srv, spreadsheetId, "Eyes", "B", 2)
+	fetch(ctx, tails, srv, spreadsheetId, "Tails", "A", 2)
+	fetch(ctx, ears, srv, spreadsheetId, "Ears", "A", 2)
+	fetch(ctx, whiskerColour, srv, spreadsheetId, "Whisker Colour", "A", 2)
+	fetch(ctx, whiskerShape, srv, spreadsheetId, "Whisker Shape", "A", 2)
+	fetch(ctx, shades, srv, spreadsheetId, "Other", "F", 3)
+	<-furs
+	<-eyes
+	<-tails
+	<-ears
+	<-whiskerColour
+	<-whiskerShape
+	<-shades
 }
