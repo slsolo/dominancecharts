@@ -63,10 +63,10 @@ func fetch(ctx context.Context, done chan bool, srv *sheets.Service, spreadsheet
 }
 
 func main() {
-	err := godotenv.Load(".env")
+	err := godotenv.Load("../.env")
 
 	if err != nil {
-		log.Println("In production, fetching config from Heroku config parameters...")
+		log.Printf("In production, fetching config from Heroku config parameters... (%s)\n", err.Error())
 	}
 
 	ctx := context.Background()

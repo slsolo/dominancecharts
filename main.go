@@ -1,65 +1,152 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
-	"google.golang.org/api/option"
-	"google.golang.org/api/sheets/v4"
-
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
 )
 
-var pool *redis.Pool
+type server struct {
+	router *gin.Engine
+	pool   *redis.Pool
+}
 
-func fetch(ctx context.Context, done chan bool, srv *sheets.Service, spreadsheet, sheet, column string, row int) {
-	conn := pool.Get()
+func (s *server) getData(command, hash, key string) ([]string, error) {
+	conn := s.pool.Get()
 	defer conn.Close()
-
-	readRange := fmt.Sprintf("%s!%s%d:%s", sheet, column, row, column)
-	resp, err := srv.Spreadsheets.Get(spreadsheet).Ranges(readRange).IncludeGridData(true).Do()
+	var values []string
+	var err error
+	switch command {
+	case "names":
+		values, err = redis.Strings(conn.Do("HKEYS", hash))
+		break
+	case "values":
+		values, err = redis.Strings(conn.Do("HGETALL", hash))
+		break
+	case "single":
+		var v string
+		v, _ = redis.String(conn.Do("HGET", hash, key))
+		values = append(values, v)
+	}
 	if err != nil {
-		log.Fatalf("Unable to retrieve data from sheet: %v", err)
+		fmt.Printf("%v\n", err)
+		return make([]string, 0), err
 	}
+	return values, nil
+}
 
-	endofrange := 0
-	for _, sht := range resp.Sheets {
-		for _, row := range sht.Data {
-			for p, cell := range row.RowData {
-				for _, val := range cell.Values {
-					if val.FormattedValue == "" {
-						if endofrange == 0 {
-							endofrange = p + 1
-							break
-						}
-					}
-				}
-			}
+func (s *server) routes() {
+	s.router.GET("/api/:trait/names", func(c *gin.Context) {
+		values, err := s.getData("names", strings.Title(c.Param("trait")), "")
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
 		}
-	}
 
-	placedRange := fmt.Sprintf("%s!%s%d:%s%d", sheet, column, row, column, endofrange)
-	log.Printf("Placed range %s\n", placedRange)
-	resp, _ = srv.Spreadsheets.Get(spreadsheet).Ranges(placedRange).IncludeGridData(true).Do()
-
-	for _, sht := range resp.Sheets {
-		for _, row := range sht.Data {
-			for p, cell := range row.RowData {
-				for _, val := range cell.Values {
-					fmt.Printf("%s: %d", val.FormattedValue, p+1)
-					_, err = conn.Do("HSET", sheet, val.FormattedValue, p+1)
-					if err != nil {
-						log.Fatalf("Error setting redis value %v\n", err)
-					}
-				}
-			}
+		if len(values) == 0 {
+			c.String(http.StatusNotFound, fmt.Sprintf("No %ss found.", c.Param("trait")))
+			return
 		}
-	}
-	done <- true
+		sort.Strings(values)
+		c.JSON(http.StatusOK, values)
+	})
+	s.router.GET("/api/:trait", func(c *gin.Context) {
+		placed := make(map[string]int)
+		values, err := s.getData("values", strings.Title(c.Param("trait")), "")
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if len(values) == 0 {
+			c.String(http.StatusNotFound, fmt.Sprintf("no %ss found", c.Param("trait")))
+			return
+		}
+
+		respLen := len(values)
+		for i := 0; i < respLen; i += 2 {
+			placed[values[i]], _ = strconv.Atoi(values[i+1])
+		}
+		c.JSON(http.StatusOK, placed)
+	})
+
+	s.router.GET("/api/:trait/:name", func(c *gin.Context) {
+		values, err := s.getData("names", strings.Title(c.Param("trait")), c.Param("name"))
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if len(values) == 0 {
+			c.String(http.StatusNotFound, "%s %s not found\n", c.Param("Trait"), c.Param("name"))
+			return
+		}
+		var i int
+		i, err = strconv.Atoi(values[0])
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Value is not an integer")
+			return
+		}
+		c.JSON(200, i)
+	})
+
+	s.router.GET("/api/:trait/compare/:first/:second", func(c *gin.Context) {
+		trait := strings.Title(c.Param("trait"))
+		first := c.Param("first")
+		second := c.Param("second")
+		var fi, si int
+		values, err := s.getData("single", trait, first)
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if len(values) == 0 {
+			c.String(http.StatusNotFound, "%s %s not found\n", trait, first)
+			return
+		}
+
+		fi, err = strconv.Atoi(values[0])
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		values, err = s.getData("single", trait, second)
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if len(values) == 0 {
+			c.String(http.StatusNotFound, "%s %s not found\n", trait, second)
+			return
+		}
+
+		si, err = strconv.Atoi(values[0])
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if first == second {
+			c.String(400, "Both %ss are the same. Please change your selection and try again.", trait)
+		} else if fi < si {
+			c.String(200, fmt.Sprintf("%s is dominant to %s", first, second))
+		} else {
+			c.String(200, fmt.Sprintf("%s is recessive to %s", first, second))
+		}
+	})
 }
 
 func main() {
@@ -68,40 +155,20 @@ func main() {
 	if err != nil {
 		log.Println("In production, fetching config from Heroku config parameters...")
 	}
-
-	ctx := context.Background()
-	pool = &redis.Pool{
-		MaxIdle:     10,
-		IdleTimeout: 240 * time.Second,
-		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", os.Getenv("REDIS_TLS_URL"))
+	srv := server{
+		router: gin.Default(),
+		pool: &redis.Pool{
+			MaxIdle:     10,
+			IdleTimeout: 240 * time.Second,
+			Dial: func() (redis.Conn, error) {
+				return redis.Dial("tcp", os.Getenv("REDIS_TLS_URL"))
+			},
 		},
 	}
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	srv.router.Use(cors.New(config))
+	srv.routes()
 
-	srv, err := sheets.NewService(ctx, option.WithAPIKey(os.Getenv("API_KEY")))
-	if err != nil {
-		log.Fatalf("Unable to retrieve Sheets client: %v", err)
-	}
-	furs := make(chan bool, 1)
-	eyes := make(chan bool, 1)
-	tails := make(chan bool, 1)
-	ears := make(chan bool, 1)
-	whiskerColour := make(chan bool, 1)
-	whiskerShape := make(chan bool, 1)
-	shades := make(chan bool, 1)
-	spreadsheetId := os.Getenv("SPREADSHEET")
-	fetch(ctx, furs, srv, spreadsheetId, "Fur", "B", 2)
-	fetch(ctx, eyes, srv, spreadsheetId, "Eyes", "B", 2)
-	fetch(ctx, tails, srv, spreadsheetId, "Tails", "A", 2)
-	fetch(ctx, ears, srv, spreadsheetId, "Ears", "A", 2)
-	fetch(ctx, whiskerColour, srv, spreadsheetId, "Whisker Colour", "A", 2)
-	fetch(ctx, whiskerShape, srv, spreadsheetId, "Whisker Shape", "A", 2)
-	fetch(ctx, shades, srv, spreadsheetId, "Other", "F", 3)
-	<-furs
-	<-eyes
-	<-tails
-	<-ears
-	<-whiskerColour
-	<-whiskerShape
-	<-shades
+	srv.router.Run()
 }
