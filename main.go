@@ -161,7 +161,7 @@ func main() {
 			MaxIdle:     10,
 			IdleTimeout: 240 * time.Second,
 			Dial: func() (redis.Conn, error) {
-				return redis.Dial("tcp", os.Getenv("REDIS_TLS_URL"))
+				return redis.DialURL(os.Getenv("REDIS_TLS_URL"), redis.DialTLSSkipVerify(true))
 			},
 		},
 	}
