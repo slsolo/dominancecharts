@@ -82,6 +82,9 @@ func main() {
 			return redis.DialURL(os.Getenv("REDIS_TLS_URL"), redis.DialTLSSkipVerify(true))
 		},
 	}
+	conn := pool.Get()
+	defer conn.Close()
+	conn.Do("FLUSHALL")
 
 	srv, err := sheets.NewService(ctx, option.WithAPIKey(os.Getenv("API_KEY")))
 	if err != nil {
