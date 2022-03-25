@@ -35,7 +35,10 @@ func (s *server) getData(command, hash, key string) ([]string, error) {
 		break
 	case "single":
 		var v string
-		v, _ = redis.String(conn.Do("HGET", hash, key))
+		v, err = redis.String(conn.Do("HGET", hash, key))
+		if err != nil {
+			values = append(values, err.Error())
+		}
 		values = append(values, v)
 	}
 	if err != nil {
@@ -118,6 +121,7 @@ func (s *server) routes() {
 
 		fi, err = strconv.Atoi(values[0])
 		if err != nil {
+			log.Printf("trying to parse %s\n", values[0])
 			c.String(http.StatusInternalServerError, err.Error())
 			return
 		}

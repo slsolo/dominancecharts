@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/api/option"
@@ -50,8 +51,12 @@ func fetch(ctx context.Context, done chan bool, srv *sheets.Service, spreadsheet
 		for _, row := range sht.Data {
 			for p, cell := range row.RowData {
 				for _, val := range cell.Values {
-					fmt.Printf("%s: %d", val.FormattedValue, p+1)
-					_, err = conn.Do("HSET", sheet, val.FormattedValue, p+1)
+					key := val.FormattedValue
+					if strings.HasSuffix(key, "*") {
+						key = key[:len(key)-2]
+					}
+					fmt.Printf("%s: %d", key, p+1)
+					_, err = conn.Do("HSET", sheet, key, p+1)
 					if err != nil {
 						log.Fatalf("Error setting redis value %v\n", err)
 					}
