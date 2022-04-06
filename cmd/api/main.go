@@ -16,6 +16,17 @@ type config struct {
 	env  string
 }
 
+type TraitAttributes struct {
+	FirstRelease bool `redis:"first_release"`
+	Retired      bool `redis:"retired"`
+}
+
+type TraitData struct {
+	Name       string          `redis:"name"`
+	Position   int             `redis:position`
+	Attributes TraitAttributes `redis:"attributes"`
+}
+
 type application struct {
 	pool   *redis.Pool
 	config config

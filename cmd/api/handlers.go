@@ -3,39 +3,41 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/gomodule/redigo/redis"
 )
 
 func (s *application) TraitNamesHandler(w http.ResponseWriter, r *http.Request) {
-	values, err := s.getData("names", strings.Title(c.Param("trait")), "")
+	vars := mux.Vars(r)
+	values, err := s.getData("names", strings.Title(vars["trait"]), "")
 	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "%s\n", err.Error())
 		return
 	}
 
 	if len(values) == 0 {
-		c.String(http.StatusNotFound, fmt.Sprintf("No %ss found.", c.Param("trait")))
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintf(w, "No %ss found.\n", vars["trait"])
 		return
 	}
 	sort.Strings(values)
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(values).Encode(w)
+	json.NewEncoder(w).Encode(values)
 }
 
 func (s *application) TraitGetHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	placed := make(map[string]int)
-	values, err := s.getData("values", strings.Title(c.Param("trait")), "")
+	values, err := s.getData("values", strings.Title(vars["trait"]), "")
 	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "%s\n", err.Error())
 		return
 	}
 
