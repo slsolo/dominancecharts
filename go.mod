@@ -6,9 +6,6 @@ go 1.17
 require (
 	github.com/joho/godotenv v1.4.0
 	google.golang.org/api v0.70.0
-)
-
-require (
 	cloud.google.com/go/compute v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -18,3 +15,4 @@ require (
 	golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
+
