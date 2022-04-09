@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/gomodule/redigo/redis"
-	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gomodule/redigo/redis"
+	"github.com/joho/godotenv"
 )
 
 type config struct {
