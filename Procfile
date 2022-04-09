@@ -1,1 +1,1 @@
-web: dominancecharts
+web: api
