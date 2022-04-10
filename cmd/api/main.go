@@ -10,22 +10,12 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
+	// "github.com/slsolo/dominancecharts/internal/data"
 )
 
 type config struct {
 	port int
 	env  string
-}
-
-type TraitAttributes struct {
-	FirstRelease bool `redis:"first_release"`
-	Retired      bool `redis:"retired"`
-}
-
-type TraitData struct {
-	Name       string          `redis:"name"`
-	Position   int             `redis:position`
-	Attributes TraitAttributes `redis:"attributes"`
 }
 
 type application struct {

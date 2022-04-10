@@ -13,21 +13,10 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
+	// "github.com/slsolo/dominancecharts/internal/data"
 )
 
 var pool *redis.Pool
-
-type TraitAttributes struct {
-	LimitedEdition bool `redis:"limited_edition"`
-	Retired        bool `redis:"retired"`
-	InitialRelease bool `redis:"initial_release"`
-}
-
-type Trait struct {
-	Name       string `redis:"name"`
-	position   int
-	Attributes TraitAttributes
-}
 
 func fetch(ctx context.Context, done chan bool, srv *sheets.Service, spreadsheet, sheet, column string, row int) {
 	conn := pool.Get()
