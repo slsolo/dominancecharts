@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
-	// "github.com/slsolo/dominancecharts/internal/data"
+	"github.com/rs/cors"
+	"github.com/slsolo/dominancecharts/internal/data"
 )
 
 type config struct {
@@ -19,42 +19,16 @@ type config struct {
 }
 
 type application struct {
-	pool   *redis.Pool
 	config config
 	logger *log.Logger
-}
-
-func (s *application) getData(command, hash, key string) ([]string, error) {
-	conn := s.pool.Get()
-	defer conn.Close()
-	var values []string
-	var err error
-	switch command {
-	case "names":
-		values, err = redis.Strings(conn.Do("HKEYS", hash))
-		break
-	case "values":
-		values, err = redis.Strings(conn.Do("HGETALL", hash))
-		break
-	case "single":
-		var v string
-		v, err = redis.String(conn.Do("HGET", hash, key))
-		if err != nil {
-			values = append(values, err.Error())
-		}
-		values = append(values, v)
-	}
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		return make([]string, 0), err
-	}
-	return values, nil
+	models *data.TraitModels
 }
 
 func main() {
 	err := godotenv.Load(".env")
 
 	if err != nil {
+		log.Println(err)
 		log.Println("In production, fetching config from Heroku config parameters...")
 	}
 
@@ -66,27 +40,28 @@ func main() {
 	// corresponding flags are provided.
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
+
 	flag.Parse()
 
 	// Initialize a new logger which writes messages to the standard out stream,
 	// prefixed with the current date and time.
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
-
+	traits, err := data.NewTraitsFromGDoc()
+	if err != nil {
+		log.Fatalf("Error fetching data from Dominance Charts: %v\n", err)
+	}
+	fmt.Println(*&traits.Data)
 	app := &application{
 		config: cfg,
 		logger: logger,
-		pool: &redis.Pool{
-			MaxIdle:     10,
-			IdleTimeout: 240 * time.Second,
-			Dial: func() (redis.Conn, error) {
-				return redis.DialURL(os.Getenv("REDIS_TLS_URL"), redis.DialTLSSkipVerify(true))
-			},
-		},
+		models: traits,
 	}
+
+	handler := cors.Default().Handler(app.Routes())
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      app.routes(),
+		Handler:      handler,
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
