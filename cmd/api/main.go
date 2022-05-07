@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/rs/cors"
 	"github.com/slsolo/dominancecharts/internal/data"
 )
 
@@ -19,17 +18,20 @@ type config struct {
 }
 
 type application struct {
-	config config
-	logger *log.Logger
-	models *data.TraitModels
+	config   config
+	errorLog *log.Logger
+	infoLog  *log.Logger
+	models   *data.TraitModels
 }
 
 func main() {
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Llongfile)
 	err := godotenv.Load(".env")
 
 	if err != nil {
-		log.Println(err)
-		log.Println("In production, fetching config from Heroku config parameters...")
+		errorLog.Println(err)
+		errorLog.Println("In production, fetching config from Heroku config parameters...")
 	}
 
 	// Declare an instance of the config struct.
@@ -43,32 +45,29 @@ func main() {
 
 	flag.Parse()
 
-	// Initialize a new logger which writes messages to the standard out stream,
-	// prefixed with the current date and time.
-	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	traits, err := data.NewTraitsFromGDoc()
 	if err != nil {
-		log.Fatalf("Error fetching data from Dominance Charts: %v\n", err)
+		errorLog.Fatalf("Error fetching data from Dominance Charts: %v\n", err)
 	}
 	fmt.Println(*&traits.Data)
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: traits,
+		config:   cfg,
+		errorLog: errorLog,
+		infoLog:  infoLog,
+		models:   traits,
 	}
-
-	handler := cors.Default().Handler(app.Routes())
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      handler,
+		ErrorLog:     errorLog,
+		Handler:      app.Routes(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
 	// Start the HTTP server.
-	logger.Printf("starting %s server on %s", cfg.env, srv.Addr)
+	infoLog.Printf("starting %s server on %s", cfg.env, srv.Addr)
 	err = srv.ListenAndServe()
-	logger.Fatal(err)
+	errorLog.Fatal(err)
 }

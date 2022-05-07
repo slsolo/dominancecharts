@@ -7,23 +7,23 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/slsolo/dominancecharts/internal/data"
 )
 
-func (application *application) TraitGetHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) TraitGetHandler(w http.ResponseWriter, r *http.Request) {
 	var traits []data.Trait
-	vars := mux.Vars(r)
-	placed := application.models.Data
-	mtraits := placed[strings.Title(vars["trait"])]
+	trait := chi.URLParam(r, "trait")
+	placed := app.models.Data
+	mtraits := placed[strings.Title(trait)]
 	for _, v := range mtraits {
 		traits = append(traits, v)
 	}
 
 	if len(traits) == 0 {
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, "No Furs found.\n")
+		fmt.Fprintf(w, "No %ss found.\n", trait)
 		return
 	}
 	sort.Slice(traits, func(i, j int) bool { return traits[i].Name < traits[j].Name })
@@ -34,15 +34,16 @@ func (application *application) TraitGetHandler(w http.ResponseWriter, r *http.R
 }
 
 func (app *application) TraitGetValueHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	traitType := chi.URLParam(r, "trait")
+	traitName := chi.URLParam(r, "name")
 	placed := app.models.Data
-	mtraits := placed[strings.Title(vars["trait"])]
+	mtraits := placed[strings.Title(traitType)]
 
-	trait, ok := mtraits[vars["name"]]
+	trait, ok := mtraits[traitName]
 
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, "%s %s not found.\n", vars["trait"], vars["name"])
+		fmt.Fprintf(w, "%s %s not found.\n", traitType, traitName)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

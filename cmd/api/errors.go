@@ -5,5 +5,5 @@ import (
 )
 
 func (app *application) logError(r *http.Request, err error) {
-	app.logger.Println(err)
+	app.errorLog.Println(err)
 }
