@@ -1,11 +1,11 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -13,7 +13,7 @@ import (
 )
 
 type config struct {
-	port int
+	port int64
 	env  string
 }
 
@@ -36,14 +36,9 @@ func main() {
 
 	// Declare an instance of the config struct.
 	var cfg config
-
-	// Read the value of the port and env command-line flags into the config struct. We
-	// default to using the port number 4000 and the environment "development" if no
-	// corresponding flags are provided.
-	flag.IntVar(&cfg.port, "port", 4000, "API server port")
-	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
-
-	flag.Parse()
+	val, err := strconv.ParseInt(os.Getenv("PORT"), 10, 32)
+	cfg.port = val
+	cfg.env = os.Getenv("ENVIRONMENT")
 
 	traits, err := data.NewTraitsFromGDoc()
 	if err != nil {
