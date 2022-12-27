@@ -12,11 +12,14 @@ import (
 )
 
 type Trait struct {
-	Name     string `json:"name"`
-	Position int    `json:"position"`
-	Initial  bool   `json:"initial_release"`
-	Retired  bool   `json:"retired"`
-	Limited  bool   `json:"limited_edition"`
+	Name       string `json:"name"`
+	Position   int    `json:"position"`
+	Initial    bool   `json:"initial_release"`
+	Retired    bool   `json:"retired"`
+	Limited    bool   `json:"limited_edition"`
+	Unplaced   bool   `json:"unplaced"`
+	RangeStart int    `json:"range_start"`
+	RangeEnd   int    `json:"range_end"`
 }
 type DocData map[string]map[string]Trait
 
@@ -39,6 +42,13 @@ func NewTraitsFromGDoc() (*TraitModels, error) {
 	if err != nil {
 		return &TraitModels{}, err
 	}
+	count_furs := 0
+	count_eyes := 0
+	count_tails := 0
+	count_ears := 0
+	count_whisker_colours := 0
+	count_whisker_shapes := 0
+	count_shades := 0
 	for _, sht := range resp.Sheets {
 		fmt.Printf("\n=======PROCESSING %s==============\n", sht.Properties.Title)
 		sheetProcessed := false
@@ -54,9 +64,31 @@ func NewTraitsFromGDoc() (*TraitModels, error) {
 						sheetProcessed = true
 						continue
 					}
+					if sht.Properties.Title == "Fur" {
+						count_furs++
+					}
+					if sht.Properties.Title == "Eyes" {
+						count_eyes++
+					}
+					if sht.Properties.Title == "Tails" {
+						count_tails++
+					}
+					if sht.Properties.Title == "Ears" {
+						count_ears++
+					}
+					if sht.Properties.Title == "Whisker Colour" {
+						count_whisker_colours++
+					}
+					if sht.Properties.Title == "Whisker Shape" {
+						count_whisker_shapes++
+					}
+					if sht.Properties.Title == "Other" {
+						count_shades++
+					}
 					var isRetired bool
 					var isInitialRelease bool
 					var isLimitedEdition bool
+					var isUnplaced bool
 					var trait Trait
 					if strings.Contains(key, "*") {
 						isInitialRelease = true
